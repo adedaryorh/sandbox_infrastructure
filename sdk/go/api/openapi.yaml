@@ -1,0 +1,75 @@
+openapi: 3.0.0
+info:
+  title: Sandboxing SDK
+  version: 1.0.0
+servers:
+- url: /
+paths:
+  /v1/sandboxes:
+    get:
+      responses:
+        "200":
+          description: List of sandboxes
+      summary: List sandboxes
+    post:
+      responses:
+        "200":
+          description: Created
+      summary: Create a new sandbox
+  /v1/sandboxes/{id}:
+    delete:
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          description: Destroyed
+      summary: Destroy a sandbox
+    get:
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          description: Sandbox details
+      summary: Get sandbox details
+  /v1/sandboxes/{id}/pause:
+    post:
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          description: Paused
+      summary: Pause a sandbox
+  /v1/sandboxes/{id}/resume:
+    post:
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          description: Resumed
+      summary: Resume a sandbox
+components:
+  schemas: {}

@@ -1,0 +1,38 @@
+# ── MetalLB ───────────────────────────────────────────────────────────────────
+# Only needed for BARE METAL or on-prem Kubernetes (kubeadm, k3s).
+# On AWS/GCP/Azure/Hetzner the cloud provider gives you a LoadBalancer — skip this file.
+#
+# Install MetalLB:
+#   kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.3/config/manifests/metallb-native.yaml
+#
+# Then apply this file:
+#   kubectl apply -f k8s/metallb.yaml
+
+---
+# ── IP address pool ───────────────────────────────────────────────────────────
+# Give MetalLB a range of IPs it can assign to LoadBalancer services.
+# These must be IPs on your network that are NOT assigned to any machine.
+# Change 192.168.1.200-192.168.1.220 to match your network.
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: sandbox-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 192.168.1.200-192.168.1.220   # ← change to your available IP range
+
+---
+# ── L2 advertisement ──────────────────────────────────────────────────────────
+# Tells MetalLB to advertise IPs using ARP (Layer 2).
+# Works on any flat network. For BGP environments use BGPAdvertisement instead.
+
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: sandbox-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - sandbox-pool

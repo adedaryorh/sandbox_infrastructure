@@ -1,0 +1,80 @@
+# ── GPU Tier ──────────────────────────────────────────────────────────────────
+# GPU sandboxes always use the secure isolation tier (gVisor).
+# GPU nodes run on a dedicated node pool with NVIDIA drivers pre-installed.
+#
+# On Hetzner: use AX-series dedicated servers with NVIDIA cards.
+# On AWS:     add a GPU node group to EKS (g4dn.xlarge / p3.2xlarge).
+# On GCP:     add a GPU node pool to GKE with NVIDIA T4 or A100.
+#
+# Step 1 — Install NVIDIA drivers on GPU nodes:
+#   Ubuntu 22.04:
+#   apt-get install -y nvidia-driver-535 nvidia-container-toolkit
+#   systemctl restart containerd
+#
+# Step 2 — Install the NVIDIA device plugin:
+#   kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.5/nvidia-device-plugin.yml
+#
+# Step 3 — Apply this file:
+#   kubectl apply -f k8s/gpu.yaml
+
+---
+# ── RuntimeClass for GPU sandboxes ────────────────────────────────────────────
+# GPU sandboxes use gVisor (secure tier) — same as regular secure sandboxes.
+# No extra RuntimeClass needed — they reuse the gvisor RuntimeClass from runtimeclass.yaml.
+
+---
+# ── GPU node label ────────────────────────────────────────────────────────────
+# Label your GPU nodes so the orchestrator can schedule GPU pods on them.
+#
+#   kubectl label nodes <gpu-node-name> node-type=gpu
+#   kubectl label nodes <gpu-node-name> nvidia.com/gpu.present=true
+
+---
+# ── ResourceQuota for GPU namespace ───────────────────────────────────────────
+# Prevent runaway GPU usage — limit how many GPUs can be allocated at once.
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-quota
+  namespace: sandboxes
+spec:
+  hard:
+    requests.nvidia.com/gpu: "8"    # max 8 GPUs across all sandbox pods
+    limits.nvidia.com/gpu: "8"
+
+---
+# ── Example GPU sandbox pod spec ──────────────────────────────────────────────
+# This is what pod_builder.go generates for GPU sandbox requests.
+# You do NOT apply this manually — the orchestrator generates it dynamically.
+#
+# Shown here for reference only.
+
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: sb-gpu-example
+#   namespace: sandboxes
+# spec:
+#   runtimeClassName: gvisor          # always secure tier for GPU
+#   restartPolicy: Never
+#   nodeSelector:
+#     node-type: gpu                  # schedule only on GPU nodes
+#   containers:
+#     - name: sandbox
+#       image: nvidia/cuda:12.3.0-runtime-ubuntu22.04
+#       command: ["/bin/sh", "-c", "sleep infinity"]
+#       resources:
+#         limits:
+#           nvidia.com/gpu: "1"       # request 1 GPU
+#           memory: "16Gi"
+#           cpu: "4"
+#         requests:
+#           nvidia.com/gpu: "1"
+#           memory: "16Gi"
+#           cpu: "4"
+#       env:
+#         - name: NVIDIA_VISIBLE_DEVICES
+#           value: all
+#         - name: NVIDIA_DRIVER_CAPABILITIES
+#           value: compute,utility

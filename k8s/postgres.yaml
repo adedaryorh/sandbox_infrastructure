@@ -1,0 +1,83 @@
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+# For production: use a managed database (RDS, Cloud SQL, Supabase, Neon).
+# This StatefulSet is for local development or self-hosted bare-metal deploys.
+#
+# On Hetzner bare metal: this is fine.
+# On AWS/GCP/Azure: replace with RDS/Cloud SQL and delete this file.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: sandboxes
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # uses cluster default storage class:
+  # Hetzner  → hcloud-volumes
+  # AWS      → gp3 (EBS CSI)
+  # bare metal → longhorn or rook-ceph
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: sandboxes
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: sandboxing
+            - name: POSTGRES_USER
+              value: sandboxing
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-secrets
+                  key: DATABASE_URL   # parse password from URL in init script
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: sandboxes
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP

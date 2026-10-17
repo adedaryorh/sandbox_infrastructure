@@ -1,0 +1,46 @@
+# NetworkPolicy: sandbox pods cannot make outbound connections by default.
+# This prevents AI-generated code from making HTTP calls, stealing data, etc.
+#
+# To allow specific domains (e.g. for pip install), create a separate
+# NetworkPolicy that whitelists specific IP ranges or use an egress proxy.
+#
+# kubectl apply -f k8s/network/sandbox-network-policy.yaml
+
+---
+# Default deny-all egress for sandbox pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-deny-egress
+  namespace: sandboxes
+spec:
+  podSelector:
+    matchLabels:
+      app: sandbox
+  policyTypes:
+    - Egress
+  # No egress rules = deny all outbound traffic
+  # Sandboxes cannot call external APIs, databases, or other services
+
+---
+# Allow ingress from the orchestration engine only
+# Sandbox pods accept exec/pty connections only from the orchestrator
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-allow-orchestrator-ingress
+  namespace: sandboxes
+spec:
+  podSelector:
+    matchLabels:
+      app: sandbox
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app: sandbox-orchestrator

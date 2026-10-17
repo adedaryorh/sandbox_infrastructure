@@ -1,0 +1,91 @@
+# Deployment for the orchestration engine (your Go service).
+# This is the only thing you actually write code for.
+# The load balancer and ingress point to this service.
+#
+# kubectl apply -f k8s/sandbox/orchestrator-deployment.yaml
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sandbox-orchestrator
+  namespace: default
+  labels:
+    app: sandbox-orchestrator
+spec:
+  replicas: 2  # run 2 replicas — SKIP LOCKED handles concurrent workers safely
+  selector:
+    matchLabels:
+      app: sandbox-orchestrator
+  template:
+    metadata:
+      labels:
+        app: sandbox-orchestrator
+    spec:
+      serviceAccountName: sandbox-orchestrator
+
+      containers:
+        - name: orchestrator
+          image: yourorg/sandbox-orchestrator:latest
+          ports:
+            - containerPort: 8080
+
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-secrets
+                  key: database-url
+            - name: SANDBOX_NAMESPACE
+              value: "sandboxes"
+            - name: CADDY_ADMIN_URL
+              value: "http://caddy:2019"
+            - name: PLATFORM_DOMAIN
+              value: "sandbox.yourplatform.com"
+            - name: WARM_POOL_REFILL_SEC
+              value: "10"
+            - name: TASK_WORKERS
+              value: "10"
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# Service — exposes the orchestrator to the load balancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: sandbox-orchestrator
+  namespace: default
+spec:
+  selector:
+    app: sandbox-orchestrator
+  ports:
+    - port: 80
+      targetPort: 8080
+  # LoadBalancer type tells your cloud provider to provision an LB automatically
+  # On Hetzner: uses Hetzner CCM
+  # On AWS:     uses AWS ALB
+  # On bare metal: uses MetalLB (install separately)
+  type: LoadBalancer
