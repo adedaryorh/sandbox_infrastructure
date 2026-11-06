@@ -1,0 +1,99 @@
+# PostgreSQL StatefulSet — use this for local/bare-metal/Hetzner deployments.
+# For AWS use RDS, for GCP use Cloud SQL, for Azure use Azure Database.
+# All managed services use the same DATABASE_URL env var — no code changes needed.
+#
+# kubectl apply -f k8s/sandbox/postgres.yaml
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+
+          env:
+            - name: POSTGRES_DB
+              value: sandboxing
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: password
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+        # uses cluster default storage class
+        # Hetzner: hcloud-volumes
+        # AWS: gp3 EBS
+        # bare-metal: Longhorn or Rook-Ceph
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None  # headless service for StatefulSet DNS
+
+---
+# Secrets — replace values with real credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secrets
+  namespace: default
+type: Opaque
+stringData:
+  password: "change-me-in-production"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orchestrator-secrets
+  namespace: default
+type: Opaque
+stringData:
+  database-url: "postgres://postgres:change-me-in-production@postgres:5432/sandboxing?sslmode=disable"

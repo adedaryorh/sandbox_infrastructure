@@ -1,0 +1,64 @@
+# ── VolumeSnapshotClass ───────────────────────────────────────────────────────
+# Enables the Kubernetes VolumeSnapshot API for sandbox snapshots.
+# The snapshot driver must match your cloud provider's CSI driver.
+#
+# Apply the snapshot CRDs first:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshotclasses.yaml
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshots.yaml
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml
+#
+# Then apply the right file for your cloud:
+
+# ── Hetzner ───────────────────────────────────────────────────────────────────
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: hcloud-snapclass
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: csi.hetzner.cloud
+deletionPolicy: Delete
+
+---
+# ── AWS EBS ───────────────────────────────────────────────────────────────────
+# Uncomment if running on AWS. Comment out Hetzner above.
+# apiVersion: snapshot.storage.k8s.io/v1
+# kind: VolumeSnapshotClass
+# metadata:
+#   name: ebs-snapclass
+#   annotations:
+#     snapshot.storage.kubernetes.io/is-default-class: "true"
+# driver: ebs.csi.aws.com
+# deletionPolicy: Delete
+
+---
+# ── GCP PD ────────────────────────────────────────────────────────────────────
+# Uncomment if running on GCP.
+# apiVersion: snapshot.storage.k8s.io/v1
+# kind: VolumeSnapshotClass
+# metadata:
+#   name: pd-snapclass
+#   annotations:
+#     snapshot.storage.kubernetes.io/is-default-class: "true"
+# driver: pd.csi.storage.gke.io
+# deletionPolicy: Delete
+
+---
+# ── StorageClass ──────────────────────────────────────────────────────────────
+# Defines how PVCs are provisioned for persistent sandboxes.
+# The orchestrator sets no storageClassName — it uses the cluster default.
+# You set the default here per environment.
+
+# Hetzner
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hcloud-volumes
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: csi.hetzner.cloud
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+# AWS: default gp3 is set automatically by EKS — no StorageClass YAML needed.
+# GCP: pd-ssd is set automatically by GKE — no StorageClass YAML needed.

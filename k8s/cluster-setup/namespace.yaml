@@ -1,0 +1,11 @@
+# All sandbox pods run in this dedicated namespace.
+# Isolating them from the orchestration engine prevents cross-namespace access.
+#
+# kubectl apply -f k8s/cluster-setup/namespace.yaml
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandboxes
+  labels:
+    purpose: sandbox-execution

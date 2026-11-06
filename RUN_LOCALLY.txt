@@ -1,0 +1,43 @@
+To run the application locally while keeping the infrastructure (Postgres, Caddy) in Docker, follow these steps:
+
+### 1. Update Docker Setup
+First, ensure only the infrastructure services are running. Since we commented out the `server` in `docker-compose.yml`, run the following in your terminal to restart the infrastructure-only stack:
+
+```bash
+docker-compose down -v
+docker-compose up -d postgres caddy
+```
+
+### 2. Configure Local Environment
+When running on your host, the application needs to connect to the database via `localhost` instead of the internal Docker service name (`postgres`).
+
+Set these environment variables in your terminal before running the application:
+
+```bash
+export PORT=8080
+export DATABASE_URL="postgres://sandboxing:sandboxing@localhost:5432/sandboxing?sslmode=disable"
+export SANDBOX_NAMESPACE="sandboxes"
+# Point to your actual local kubeconfig file
+export KUBECONFIG="${HOME}/.kube/config" 
+export CADDY_ADMIN_URL="http://localhost:2019"
+export PLATFORM_DOMAIN="localhost"
+```
+
+### 3. Run the Application Locally
+Navigate to the root of the project and run the server directly using Go:
+
+```bash
+go run cmd/server/main.go
+```
+
+### 4. Generate SDKs
+If you are developing client libraries for your agents, you can auto-generate them from the API contract:
+
+```bash
+make generate-sdk
+```
+
+### Troubleshooting
+- **Database Connection**: If you get a connection error, ensure the Postgres container is healthy (`docker-compose ps`) and that port `5432` is mapped correctly in `docker-compose.yml`.
+- **Kubernetes Access**: Since the app runs on your host, it will use your local machine's `KUBECONFIG` to talk to your local Kubernetes cluster (e.g., kind, k3s). Ensure your cluster is running and your `kubectl` context is set correctly.
+- **Caddy Admin API**: The local Go app connects to Caddy on `http://localhost:2019`. Ensure the caddy container has port `2019` exposed in `docker-compose.yml` (it should by default).

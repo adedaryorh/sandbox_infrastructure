@@ -1,0 +1,80 @@
+# Create sandboxing-config Secret and replace the image before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: orchestrator}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: orchestrator}
+  template:
+    metadata:
+      labels: {app: orchestrator}
+    spec:
+      serviceAccountName: orchestrator
+      securityContext: {runAsNonRoot: true, runAsUser: 1001, fsGroup: 1001}
+      containers:
+        - name: server
+          image: sandboxing:local
+          imagePullPolicy: IfNotPresent
+          ports: [{containerPort: 8080}]
+          envFrom: [{secretRef: {name: sandboxing-config}}]
+          env:
+            - {name: SANDBOX_BACKEND, value: kubernetes}
+            - {name: SANDBOX_NAMESPACE, value: sandboxes}
+            - {name: CADDY_ADMIN_URL, value: 'http://caddy-admin:2019'}
+            - {name: PREVIEW_API_UPSTREAM, value: 'orchestrator:8080'}
+            - {name: ENABLE_CHECKPOINTS, value: 'false'}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: '1', memory: 512Mi}
+          readinessProbe:
+            httpGet: {path: /health, port: 8080}
+          livenessProbe:
+            httpGet: {path: /health, port: 8080}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: orchestrator}
+spec:
+  selector: {app: orchestrator}
+  ports: [{port: 8080, targetPort: 8080}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: caddy}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: caddy}
+  template:
+    metadata:
+      labels: {app: caddy}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: caddy
+          image: caddy:2-alpine
+          ports: [{containerPort: 80}, {containerPort: 2019}]
+          volumeMounts:
+            - {name: config, mountPath: /etc/caddy, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: caddy-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: caddy}
+spec:
+  selector: {app: caddy}
+  ports: [{port: 80, targetPort: 80}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: caddy-admin}
+spec:
+  selector: {app: caddy}
+  ports: [{port: 2019, targetPort: 2019}]

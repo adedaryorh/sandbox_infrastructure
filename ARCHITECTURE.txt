@@ -1,0 +1,39 @@
+### Sandbox Orchestration System: Architectural Theory
+
+This document details the theory of operation for the sandbox platform, explaining how the components interact to provide a safe, scalable, and isolated execution environment for AI-generated code.
+
+#### 1. System Vision
+The platform aims to provide an **Infrastructure-as-Code** environment where agents (LLMs) can safely run untrusted code. The architecture is designed around the principles of **ephemerality**, **strong isolation**, and **agentic control**.
+
+#### 2. The Sandbox Lifecycle Flow
+Every sandbox operation follows a standardized lifecycle managed by the `Orchestrator`:
+
+1.  **Request & Quota Validation:** The user or agent sends a request via the SDK/API. Before any infrastructure is provisioned, the `QuotaEnforcer` validates the request against tenant limits to prevent resource exhaustion.
+2.  **Infrastructure Abstraction (`Provider`):** The `Orchestrator` interacts with the system via the `Provider` interface. This allows the system to be infrastructure-agnostic—whether it provisions a container in Kubernetes, a local Docker container, or a specialized VM.
+3.  **Pod/Container Provisioning:** The chosen `Provider` creates the sandbox instance.
+    *   It applies **resource limits** (CPU/RAM).
+    *   It injects **secrets** (e.g., API keys required by the code).
+    *   It mounts **transient storage** (for the workspace) or **persistent volumes** (for long-lived sandboxes).
+4.  **Networking & Exposure:** Once the sandbox is running, the `Router` (using the Caddy Admin API) dynamically creates reverse-proxy routes. This maps internal pod IPs to public-facing HTTPS endpoints (for previewing web servers or MCP endpoints), enabling AI agents to interact with the environment.
+5.  **Interactive Execution (`REPLManager`):** For real-time feedback, the system supports interactive sessions (`REPLManager`). This keeps a long-lived interpreter (Python/Node/Bash) running, allowing state (variables, imports) to persist between code submissions, which is critical for agentic loops.
+6.  **State Management:** Throughout the lifecycle, the `Store` (Postgres) maintains the single source of truth for all sandbox statuses, quotas, and audit logs.
+7.  **Destruction & Cleanup:** Once the task is completed or the TTL expires, the `Orchestrator` triggers the `Provider` to destroy the pod/container and clean up associated secrets and non-persistent volumes, ensuring no trace of the untrusted code remains.
+
+#### 3. Core Component Roles
+
+*   **`Orchestrator` (The Brain):** Executes the business logic for state transitions. It manages the pool of "warm" (pre-started) sandboxes to minimize latency, handles snapshotting (state capture), and triggers background cleanup routines.
+*   **`Provider` (The Infrastructure Layer):** Decouples the system from the underlying environment (e.g., `K8sClient` for production, `DockerProvider` for local dev).
+*   **`Store` (The Persistence Layer):** Ensures the system can recover from failures and provides data for auditing.
+*   **`REPLManager` (The Execution Engine):** Manages interactive `stdin/stdout` streaming for code interpreters, essential for complex AI debugging.
+*   **`Router` (The Connectivity Layer):** Abstracts the complexities of networking and DNS by leveraging Caddy's dynamic configuration API.
+
+#### 4. Security & AI Safety Model
+To safely run AI-generated code, the platform employs multiple defense-in-depth layers:
+
+*   **Isolation Tiers:** The system supports `standard` (Docker) and `secure` (gVisor). gVisor provides a kernel-level sandbox, significantly reducing the attack surface by intercepting system calls.
+*   **Default-Deny Networking:** Through Kubernetes `NetworkPolicies`, every sandbox pod is blocked from all outbound network traffic by default, preventing data exfiltration or botnet participation.
+*   **Pre-Execution Filtering:** The architecture allows for an optional "Pre-Execution Scan" layer (part of the SDK wrapper) to analyze incoming AI code and block malicious patterns before they reach the sandbox.
+*   **Resource Guardrails:** Every sandbox is strictly capped by CPU/Memory limits at the infrastructure level.
+
+#### 5. Moving to SDK-Based Interaction
+The future of this project is the transition from a REST-API-first approach to an **SDK-first approach**. By adopting an OpenAPI specification as the contract, we can auto-generate native SDKs (Python, TypeScript, Go). This allows AI agents to interact with the environment via method calls (e.g., `sandbox.run(code)`) rather than raw HTTP requests, providing a better developer experience and more reliable integrations.

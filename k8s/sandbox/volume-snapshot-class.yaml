@@ -1,0 +1,36 @@
+# VolumeSnapshotClass — needed for the snapshot feature.
+# Install the CSI snapshotter first:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshotclasses.yaml
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshots.yaml
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml
+#
+# kubectl apply -f k8s/sandbox/volume-snapshot-class.yaml
+
+---
+# Hetzner
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: hcloud-snapshots
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: csi.hetzner.cloud
+deletionPolicy: Delete
+
+---
+# AWS (EBS CSI)
+# apiVersion: snapshot.storage.k8s.io/v1
+# kind: VolumeSnapshotClass
+# metadata:
+#   name: aws-snapshots
+# driver: ebs.csi.aws.com
+# deletionPolicy: Delete
+
+---
+# GCP (pd-csi)
+# apiVersion: snapshot.storage.k8s.io/v1
+# kind: VolumeSnapshotClass
+# metadata:
+#   name: gcp-snapshots
+# driver: pd.csi.storage.gke.io
+# deletionPolicy: Delete

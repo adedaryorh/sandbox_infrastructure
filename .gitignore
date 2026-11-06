@@ -1,0 +1,52 @@
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+
+# Installer backups
+.sandboxing-backup-*/
+
+# Go build output
+/bin/
+/dist/
+/build/
+*.test
+*.out
+coverage/
+coverage.txt
+coverage.html
+
+# Logs and temporary files
+*.log
+/tmp/
+/temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# Local development configuration
+.vscode/
+.kube/
+kubeconfig
+kubeconfig.yaml
+docker-compose.override.yml
+compose.override.yaml
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node dependencies
+node_modules/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+EOF

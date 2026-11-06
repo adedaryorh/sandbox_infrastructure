@@ -1,0 +1,67 @@
+# RBAC for the orchestration engine.
+# The Go service needs permission to create/delete pods, secrets, and PVCs
+# in the sandboxes namespace — nothing more.
+#
+# kubectl apply -f k8s/rbac/rbac.yaml
+
+---
+# ServiceAccount for the orchestration engine pod
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sandbox-orchestrator
+  namespace: default
+
+---
+# Role: what the orchestrator is allowed to do in the sandboxes namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-orchestrator
+  namespace: sandboxes
+rules:
+  # pod lifecycle — create/get/watch/delete sandbox pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+
+  # pod exec — run commands inside pods (exec, pty, files)
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+
+  # pod logs — needed for debugging
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+  # secrets — create/delete per-sandbox k8s secrets for env injection
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "get", "delete"]
+
+  # persistent volume claims — for persistent sandboxes
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "get", "delete"]
+
+  # volume snapshots — for snapshot feature
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["create", "get", "list", "delete"]
+
+---
+# Bind the role to the service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sandbox-orchestrator
+  namespace: sandboxes
+subjects:
+  - kind: ServiceAccount
+    name: sandbox-orchestrator
+    namespace: default
+roleRef:
+  kind: Role
+  name: sandbox-orchestrator
+  apiGroup: rbac.authorization.k8s.io

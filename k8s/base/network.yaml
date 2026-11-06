@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: sandbox-baseline}
+spec:
+  podSelector:
+    matchLabels: {app: sandbox}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: orchestrator}
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: caddy-admin-private}
+spec:
+  podSelector:
+    matchLabels: {app: caddy}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 80, protocol: TCP}]
+    - from:
+        - podSelector:
+            matchLabels: {app: orchestrator}
+      ports: [{port: 2019, protocol: TCP}]

@@ -1,0 +1,24 @@
+# ── gVisor RuntimeClass ───────────────────────────────────────────────────────
+#
+# Apply this ONCE to your cluster after installing gVisor on each worker node.
+# Your Go code sets pod.Spec.RuntimeClassName = "gvisor" for secure tier sandboxes.
+# Standard tier pods simply omit RuntimeClassName and use the default Docker runtime.
+#
+# HOW TO INSTALL gVisor ON EACH WORKER NODE (run on every node):
+#
+#   apt-get install -y runsc
+#
+#   # /etc/containerd/config.toml — add these lines:
+#   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+#     runtime_type = "io.containerd.runsc.v1"
+#
+#   systemctl restart containerd
+#
+# Then apply this file:
+#   kubectl apply -f k8s/cluster-setup/runtime-class.yaml
+
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gvisor
+handler: runsc

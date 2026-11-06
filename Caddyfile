@@ -1,0 +1,18 @@
+# Caddyfile — local development
+# The Go service (router.go) adds and removes routes dynamically
+# via the Caddy Admin API at :2019.
+# This file just enables the Admin API and sets up the base server.
+
+{
+    # enable the Admin API — required for dynamic route registration
+    admin 0.0.0.0:2019
+
+    # disable HTTPS redirect in local dev
+    # in production remove this block — Caddy auto-provisions TLS
+    auto_https off
+}
+
+# catch-all — Caddy routes added by router.go take precedence
+:80 {
+    respond "sandbox platform" 200
+}

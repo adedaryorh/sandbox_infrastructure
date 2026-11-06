@@ -1,0 +1,164 @@
+# ── ConfigMap ─────────────────────────────────────────────────────────────────
+# Non-secret configuration for the orchestrator.
+# Secrets (DB password, etc.) go in a Kubernetes Secret, not here.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestrator-config
+  namespace: sandboxes
+data:
+  PORT: "8080"
+  SANDBOX_NAMESPACE: "sandboxes"
+  CADDY_ADMIN_URL: "http://caddy-admin:2019"
+  PLATFORM_DOMAIN: "sandbox.yourplatform.com"
+  WARM_POOL_REFILL_SEC: "10"
+  BILLING_TICK_SEC: "1"
+  WEBHOOK_WORKERS: "5"
+  TASK_WORKERS: "10"
+  WARM_PYTHON: "10"
+  WARM_NODE: "10"
+  WARM_UBUNTU: "5"
+
+---
+# ── Secret ────────────────────────────────────────────────────────────────────
+# Create this manually — never commit real values to git.
+# kubectl create secret generic orchestrator-secrets \
+#   --from-literal=DATABASE_URL="postgres://user:pass@host:5432/sandboxing?sslmode=require" \
+#   --namespace=sandboxes
+
+# Shown here as a template only — values are placeholders.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orchestrator-secrets
+  namespace: sandboxes
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://sandboxing:CHANGE_ME@postgres:5432/sandboxing?sslmode=disable"
+
+---
+# ── Deployment ────────────────────────────────────────────────────────────────
+# The orchestration engine — your Go service.
+# Runs with the orchestrator ServiceAccount so it can manage pods.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: sandboxes
+  labels:
+    app: orchestrator
+spec:
+  replicas: 2                   # run 2 replicas for HA
+  selector:
+    matchLabels:
+      app: orchestrator
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0         # never take both replicas down at once
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+    spec:
+      serviceAccountName: orchestrator
+
+      containers:
+        - name: orchestrator
+          image: yourorg/sandboxing:latest   # replace with your image
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+
+          # load config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: orchestrator-config
+
+          # load secrets from Secret
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-secrets
+                  key: DATABASE_URL
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          # health checks — Kubernetes restarts the pod if these fail
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+      # run on dedicated orchestrator nodes if you have them
+      # otherwise remove this section
+      tolerations:
+        - key: "node-role"
+          operator: "Equal"
+          value: "orchestrator"
+          effect: "NoSchedule"
+
+---
+# ── Service ───────────────────────────────────────────────────────────────────
+# Internal ClusterIP service for the orchestrator.
+# The load balancer / ingress routes external traffic to this.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestrator
+  namespace: sandboxes
+spec:
+  selector:
+    app: orchestrator
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http
+  type: ClusterIP
+
+---
+# ── HorizontalPodAutoscaler ───────────────────────────────────────────────────
+# Scale orchestrator replicas based on CPU load.
+# Add more replicas as API traffic grows.
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: orchestrator-hpa
+  namespace: sandboxes
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orchestrator
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
